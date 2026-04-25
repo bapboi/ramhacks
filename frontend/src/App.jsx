@@ -1,32 +1,51 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import UploadBox from "./components/UploadBox";
 import MedList from "./components/MedList";
-import { addMed, getMeds } from "./api";
+import { getMeds } from "./api";
 
 function App() {
   const [meds, setMeds] = useState([]);
+  const [warnings, setWarnings] = useState([]);
+
+  const loaded = useRef(false);
 
   const loadMeds = async () => {
-    const data = await getMeds();
-    setMeds(data);
+    try {
+      const data = await getMeds();
+
+      const normalized = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.meds)
+          ? data.meds
+          : [];
+
+      setMeds(normalized);
+      setWarnings(data?.warnings || []);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  // ✅ ONLY RUN ONCE
   useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+
     loadMeds();
   }, []);
 
-  const handleResult = async (parsed) => {
-    await addMed(parsed);
-    loadMeds();
+  // ✅ ONLY TRIGGERED BY UPLOAD
+  const handleUploadComplete = async () => {
+    await loadMeds();
   };
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>💊 MedsUP!</h1>
+      <h1>medsup</h1>
 
-      <UploadBox onResult={handleResult} />
+      <UploadBox onUploaded={handleUploadComplete} />
 
-      <MedList meds={meds} />
+      <MedList meds={meds} warnings={warnings} />
     </div>
   );
 }
