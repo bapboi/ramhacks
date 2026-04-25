@@ -1,8 +1,10 @@
 from fastapi import APIRouter, UploadFile, File
 import requests
 import json
-from services.ai_parser import parse_medication
 from app.config import config
+import base64
+import re
+from app.routes.meds import med_list
 
 router = APIRouter()
 
@@ -11,42 +13,92 @@ GEMINI_API_KEY = config["Gemini"]["ApiKey"]
 
 @router.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
-    contents = await file.read()
+    try:
+        contents = await file.read()
 
-    text = "Ibuprofen 200mg take twice daily"
+        base64_image = base64.b64encode(contents).decode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        parsed = call_gemini(base64_image, file.content_type)
+
+        med_list.append(parsed)
+
+        return {"success": True, "parsed": parsed}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def call_gemini(image_base64: str, mime_type: str):
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     payload = {
         "contents": [
             {
                 "parts": [
+                    {"inline_data": {"mime_type": mime_type, "data": image_base64}},
                     {
-                        "text": f"""
-Extract medication info from this text and return ONLY valid JSON:
+                        "text": """
+You are a medical OCR system.
 
-{{
-  "name": "...",
-  "dosage": "...",
-  "frequency": "..."
-}}
+Extract medication details from this image.
 
-Text:
-{text}
+Return STRICT JSON ONLY:
+
+{
+  "name": "",
+  "dosage": "",
+  "frequency": "",
+  "instructions": {
+    "food_recommendation": "take_with_food | no_food | unknown",
+    "notes": ""
+  }
+}
+
+Rules:
+- Read text directly from the bottle/box
+- If multiple meds appear, pick the main one
+- Be accurate, not safe-default "unknown"
 """
-                    }
+                    },
                 ]
             }
         ]
     }
 
-    response = requests.post(url, json=payload)
-    data = response.json()
-
     try:
-        text_output = data["candidates"][0]["content"]["parts"][0]["text"]
-        parsed = json.loads(text_output)
-    except:
-        parsed = {"name": "Ibuprofen", "dosage": "200mg", "frequency": "twice daily"}
+        response = requests.post(url, json=payload, timeout=20)
+        data = response.json()
 
-    return {"parsed": parsed}
+        # -----------------------------
+        # DEBUG (VERY IMPORTANT)
+        # -----------------------------
+        print("🔵 GEMINI RAW RESPONSE:", json.dumps(data, indent=2))
+
+        candidate = data.get("candidates", [])[0]
+        content = candidate.get("content", {})
+        parts = content.get("parts", [])
+
+        if not parts:
+            raise Exception("No parts returned from Gemini")
+
+        raw_text = parts[0].get("text", "")
+
+        print("🟢 GEMINI RAW TEXT:", raw_text)
+
+        # -----------------------------
+        # SAFE JSON EXTRACTION
+        # -----------------------------
+        match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+
+        if match:
+            return json.loads(match.group(0))
+
+        raise Exception("No valid JSON found in Gemini output")
+
+    except Exception as e:
+        return {
+            "name": "unknown",
+            "dosage": "unknown",
+            "frequency": "unknown",
+            "instructions": {"food_recommendation": "unknown", "notes": str(e)},
+        }
