@@ -1,0 +1,8 @@
+# py venv
+venv/
+.venv/
+env/
+.env/
+
+# secrets
+appsettings.json
