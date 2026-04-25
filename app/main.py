@@ -15,3 +15,8 @@ app.add_middleware(
 )
 app.include_router(upload.router)
 app.include_router(meds.router)
+
+
+@app.get("/")
+def root():
+    return {"message": "live"}
