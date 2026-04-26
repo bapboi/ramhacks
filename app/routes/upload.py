@@ -4,7 +4,11 @@ import json
 from app.config import config
 import base64
 import re
-from app.routes.meds import med_list
+from app.state.medstore import (
+    med_store,
+    frequency_to_hours,
+    compute_next_due,
+)
 
 router = APIRouter()
 
@@ -20,7 +24,18 @@ async def upload_image(file: UploadFile = File(...)):
 
         parsed = call_gemini(base64_image, file.content_type)
 
-        med_list.append(parsed)
+        name = parsed.get("name", "unknown").lower()
+        hours = frequency_to_hours(parsed.get("frequency"))
+        med_store[name] = {
+            "name": parsed.get("name"),
+            "dosage": parsed.get("dosage"),
+            "frequency": parsed.get("frequency"),
+            "instructions": parsed.get("instructions", {}),
+            "frequency_hours": hours,
+            "last_taken": None,
+            "next_due": compute_next_due(hours),
+            "check_in_required": False,
+        }
 
         return {"success": True, "parsed": parsed}
 
@@ -72,7 +87,7 @@ Rules:
         # -----------------------------
         # DEBUG (VERY IMPORTANT)
         # -----------------------------
-        print("🔵 GEMINI RAW RESPONSE:", json.dumps(data, indent=2))
+        print("GEMINI RAW RESPONSE:", json.dumps(data, indent=2))
 
         candidate = data.get("candidates", [])[0]
         content = candidate.get("content", {})
@@ -83,7 +98,7 @@ Rules:
 
         raw_text = parts[0].get("text", "")
 
-        print("🟢 GEMINI RAW TEXT:", raw_text)
+        print("GEMINI RAW TEXT:", raw_text)
 
         # -----------------------------
         # SAFE JSON EXTRACTION
