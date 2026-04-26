@@ -35,7 +35,14 @@ create or rename appsettingsexample.json to appsettings.json, and edit the struc
 
 ### 3. install dependencies
 
-```bas h
+create a venv,
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+```bash
 pip install -r requirements.txt
 ```
 
