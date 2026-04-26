@@ -7,34 +7,30 @@ function App() {
   const [meds, setMeds] = useState([]);
   const [warnings, setWarnings] = useState([]);
 
+  // prevents double-fetch (React StrictMode issue)
   const loaded = useRef(false);
 
   const loadMeds = async () => {
     try {
       const data = await getMeds();
 
-      const normalized = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.meds)
-          ? data.meds
-          : [];
-
-      setMeds(normalized);
+      setMeds(data?.meds || []);
       setWarnings(data?.warnings || []);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load meds:", err);
+      setMeds([]);
+      setWarnings([]);
     }
   };
 
-  // ✅ ONLY RUN ONCE
   useEffect(() => {
     if (loaded.current) return;
-    loaded.current = true;
 
+    loaded.current = true;
     loadMeds();
   }, []);
 
-  // ✅ ONLY TRIGGERED BY UPLOAD
+  // called AFTER successful upload
   const handleUploadComplete = async () => {
     await loadMeds();
   };
