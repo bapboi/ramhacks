@@ -10,7 +10,6 @@ export async function uploadMedication(file) {
   });
 
   if (!res.ok) throw new Error("Upload failed");
-
   return await res.json();
 }
 
@@ -19,12 +18,28 @@ export async function getMeds() {
   return await res.json();
 }
 
-export async function addMed(med) {
-  const res = await fetch(`${BASE_URL}/meds`, {
+/** Simple check-in (no photo) */
+export async function checkIn(name) {
+  const res = await fetch(`${BASE_URL}/checkin/${encodeURIComponent(name)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(med),
   });
+  return await res.json();
+}
 
+/**
+ * Photo check-in — sends the captured image to Gemini for verification
+ * before marking the medication as taken.
+ */
+export async function checkInWithPhoto(name, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(
+    `${BASE_URL}/checkin/${encodeURIComponent(name)}/verify`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
   return await res.json();
 }
