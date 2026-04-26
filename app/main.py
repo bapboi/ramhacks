@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import upload, meds
+from app.routes import upload, meds, checkin
 
 
 app = FastAPI()
@@ -15,6 +15,7 @@ app.add_middleware(
 )
 app.include_router(upload.router)
 app.include_router(meds.router)
+app.include_router(checkin.router)
 
 
 @app.get("/")

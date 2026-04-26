@@ -24,12 +24,14 @@ def frequency_to_hours(freq: str):
 def compute_next_due(hours):
     if not hours:
         return None
-    return datetime.utcnow() + timedelta(hours=hours)
+    return (datetime.utcnow() + timedelta(hours=hours)).isoformat()
 
 
 def update_flags():
     now = datetime.utcnow()
 
     for med in med_store.values():
-        if med["next_due"] and now >= med["next_due"]:
-            med["check_in_required"] = True
+        if med["next_due"]:
+            next_due_dt = datetime.fromisoformat(med["next_due"])
+            if now >= next_due_dt:
+                med["check_in_required"] = True
