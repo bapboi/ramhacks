@@ -36,4 +36,18 @@ yarn-error.log*
 .idea/
 .vscode/
 
-frontend/dist/
+# frontend cache 
+frontend/dist/*
+
+frontend/node_modules/*
+
+# local sqlite database 
+medsup.db 
+
+# os 
+.DS_Store 
+Thumbs.db 
+
+# ssl cert 
+key.cem 
+cert.pem 

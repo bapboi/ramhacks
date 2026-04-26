@@ -1,16 +1,22 @@
 from fastapi import APIRouter
+from app.state.medstore import get_all_meds, update_flags, set_recurring, delete_med
 
 router = APIRouter()
-
-med_list = []
-
-
-@router.post("/meds")
-def add_med(med: dict):
-    med_list.append(med)
-    return {"message": "added", "data": med}
 
 
 @router.get("/meds")
 def get_meds():
-    return med_list
+    update_flags()
+    return {"meds": get_all_meds()}
+
+
+@router.patch("/meds/{name}/recurring")
+def toggle_recurring(name: str, recurring: bool):
+    set_recurring(name, recurring)
+    return {"success": True}
+
+
+@router.delete("/meds/{name}")
+def remove_med(name: str):
+    delete_med(name)
+    return {"success": True}
