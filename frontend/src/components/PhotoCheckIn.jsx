@@ -1,14 +1,12 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { checkInWithPhoto } from "../api";
 
 /**
- * PhotoCheckIn — opens the camera, captures a photo, and sends it to
- * the backend for Gemini verification before marking the med as taken.
+ * PhotoCheckIn — camera-based check-in with Gemini verification.
  *
- * Props:
- *   medName       {string}   - the medication name to verify against
- *   onSuccess     {fn}       - called when check-in is confirmed
- *   onCancel      {fn}       - called when the user cancels
+ * Camera bug fix: srcObject is assigned inside a useEffect that watches
+ * the `streaming` state, so the <video> element is guaranteed to be in
+ * the DOM before we try to attach the stream.
  */
 export default function PhotoCheckIn({ medName, onSuccess, onCancel }) {
   const videoRef = useRef(null);
@@ -18,33 +16,43 @@ export default function PhotoCheckIn({ medName, onSuccess, onCancel }) {
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | verifying | success | failed
   const [message, setMessage] = useState("");
+  const [cameraError, setCameraError] = useState("");
 
-  const startCamera = async () => {
+  // ── Attach stream to <video> only after it's rendered ──────────────────────
+  useEffect(() => {
+    if (streaming && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [streaming]);
+
+  const startCamera = useCallback(async () => {
+    setCameraError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
         audio: false,
       });
       streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      setStreaming(true);
+      setStreaming(true); // triggers useEffect above to attach stream
     } catch (err) {
-      setMessage("Could not access camera: " + err.message);
+      setCameraError("Camera unavailable: " + err.message);
     }
-  };
+  }, []);
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     setStreaming(false);
-  };
+  }, []);
 
-  // Auto-start camera on mount
+  // Auto-start on mount, clean up on unmount
   useEffect(() => {
     startCamera();
     return () => stopCamera();
-  }, []);
+  }, []); // eslint-disable-line
 
-  const capture = async () => {
+  const capture = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -54,6 +62,7 @@ export default function PhotoCheckIn({ medName, onSuccess, onCancel }) {
     canvas.getContext("2d").drawImage(video, 0, 0);
 
     canvas.toBlob(async (blob) => {
+      if (!blob) return;
       const file = new File([blob], "checkin.jpg", { type: "image/jpeg" });
       stopCamera();
       setStatus("verifying");
@@ -61,10 +70,9 @@ export default function PhotoCheckIn({ medName, onSuccess, onCancel }) {
 
       try {
         const result = await checkInWithPhoto(medName, file);
-
         if (result.success && result.verified) {
           setStatus("success");
-          setMessage(`✅ Confirmed! ${result.detected} — check-in recorded.`);
+          setMessage(`✅ Confirmed: ${result.detected}`);
           setTimeout(() => onSuccess?.(), 1500);
         } else {
           setStatus("failed");
@@ -86,91 +94,108 @@ export default function PhotoCheckIn({ medName, onSuccess, onCancel }) {
     startCamera();
   };
 
-  const containerStyle = {
-    background: "#1a1a2e",
+  // ── Styles ─────────────────────────────────────────────────────────────────
+  const wrap = {
+    background: "#12122a",
     border: "2px solid #e94560",
     borderRadius: 12,
     padding: 16,
     color: "#eee",
-    maxWidth: 420,
   };
-
-  const btnStyle = (color = "#e94560") => ({
-    background: color,
+  const btn = (bg = "#e94560") => ({
+    background: bg,
     color: "#fff",
     border: "none",
     borderRadius: 8,
-    padding: "10px 18px",
+    padding: "9px 16px",
     cursor: "pointer",
     fontWeight: 600,
+    fontSize: 13,
     marginRight: 8,
     marginTop: 10,
   });
 
   return (
-    <div style={containerStyle}>
-      <h3 style={{ margin: "0 0 12px", color: "#e94560" }}>
+    <div style={wrap}>
+      <h3 style={{ margin: "0 0 8px", color: "#e94560", fontSize: 15 }}>
         📸 Photo Check-In
       </h3>
-      <p style={{ margin: "0 0 10px", fontSize: 13, color: "#aaa" }}>
-        Hold up your <strong style={{ color: "#fff" }}>{medName}</strong> bottle
-        and take a photo to confirm.
+      <p style={{ margin: "0 0 10px", fontSize: 12, color: "#888" }}>
+        Hold up your <strong style={{ color: "#ccc" }}>{medName}</strong> bottle
+        and capture a photo.
       </p>
 
-      {/* Camera view */}
+      {/* Camera error */}
+      {cameraError && (
+        <p style={{ color: "#f44336", fontSize: 12, marginBottom: 8 }}>
+          {cameraError}
+        </p>
+      )}
+
+      {/* Live video — only rendered when streaming so srcObject assignment is safe */}
       {streaming && (
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          style={{ width: "100%", borderRadius: 8, background: "#000" }}
+          style={{
+            width: "100%",
+            borderRadius: 8,
+            background: "#000",
+            display: "block",
+          }}
         />
       )}
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
-      {/* Status message */}
+      {/* Status feedback */}
       {message && (
         <p
           style={{
-            marginTop: 10,
+            margin: "10px 0 0",
             padding: "8px 12px",
             borderRadius: 6,
+            fontSize: 13,
             background:
               status === "success"
-                ? "#1a3a1a"
+                ? "#0d2b0d"
                 : status === "failed"
-                  ? "#3a1a1a"
-                  : "#1a2a3a",
+                  ? "#2b0d0d"
+                  : "#0d1a2b",
             color:
               status === "success"
                 ? "#4caf50"
                 : status === "failed"
                   ? "#f44336"
                   : "#64b5f6",
-            fontSize: 13,
           }}
         >
-          {status === "verifying" && <span style={{ marginRight: 6 }}>⏳</span>}
+          {status === "verifying" && "⏳ "}
           {message}
         </p>
       )}
 
-      {/* Action buttons */}
-      <div>
+      {/* Buttons */}
+      <div style={{ marginTop: 4 }}>
         {streaming && (
-          <button style={btnStyle()} onClick={capture}>
+          <button style={btn()} onClick={capture}>
             📷 Capture
           </button>
         )}
         {status === "failed" && (
-          <button style={btnStyle("#2196f3")} onClick={retry}>
-            🔄 Try Again
+          <button style={btn("#2196f3")} onClick={retry}>
+            🔄 Retry
+          </button>
+        )}
+        {!streaming && status === "idle" && cameraError && (
+          <button style={btn("#2196f3")} onClick={startCamera}>
+            🔄 Try Camera Again
           </button>
         )}
         <button
-          style={btnStyle("#444")}
+          style={btn("#444")}
           onClick={() => {
             stopCamera();
             onCancel?.();

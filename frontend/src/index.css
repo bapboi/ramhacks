@@ -1,63 +1,77 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&family=DM+Mono:wght@400;500&display=swap");
+
 :root {
-  --bg: #0a0a0a;
-  --card: rgba(255, 255, 255, 0.04);
+  --bg: #04040d;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
   --border: rgba(255, 255, 255, 0.08);
-  --text: #e5e5e5;
-  --muted: #9ca3af;
-  --accent: #6366f1;
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --text: #f0f0f5;
+  --text-muted: #5a5a72;
+  --text-secondary: #9090aa;
+  --accent: #7c6af7;
+  --accent-glow: rgba(124, 106, 247, 0.18);
+  --accent-soft: rgba(124, 106, 247, 0.12);
+  --red: #f04060;
+  --red-glow: rgba(240, 64, 96, 0.2);
+  --red-soft: rgba(240, 64, 96, 0.08);
+  --green: #34d399;
+  --green-soft: rgba(52, 211, 153, 0.1);
+  --amber: #fbbf24;
+  --amber-soft: rgba(251, 191, 36, 0.1);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
 }
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  margin: 0;
-  font-family: Inter, system-ui, sans-serif;
-  background: radial-gradient(circle at top, #111 0%, #000 100%);
+  font-family: "DM Sans", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Noise grain overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.6;
+}
+
+code,
+.mono {
+  font-family: "DM Mono", monospace;
+}
+
+::selection {
+  background: var(--accent-soft);
   color: var(--text);
 }
 
-/* glass card */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  border-radius: 16px;
-  padding: 16px;
-  transition: all 0.2s ease;
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
 }
-
-.card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-/* buttons */
-.btn {
-  background: #111;
-  border: 1px solid var(--border);
-  color: white;
-  padding: 10px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn:hover {
-  background: #1a1a1a;
-  border-color: var(--accent);
-}
-
-.btn-accent {
-  background: var(--accent);
-  border: none;
-}
-
-.btn-accent:hover {
-  opacity: 0.9;
-}
-
-/* subtle glow */
-.glow {
-  box-shadow: 0 0 40px rgba(99, 102, 241, 0.15);
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
 }
