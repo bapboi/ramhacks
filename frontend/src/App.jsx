@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import UploadBox from "./components/UploadBox";
 import MedList from "./components/MedList";
 import { getMeds } from "./api";
-
+import { motion } from "framer-motion";
 const POLL_INTERVAL_MS = 30_000;
 
 function App() {
@@ -94,6 +94,18 @@ function App() {
   };
 
   return (
+<div
+  style={{
+    position: "fixed",
+    top: -100,
+    left: -100,
+    width: 400,
+    height: 400,
+    background: "radial-gradient(circle, #6366f1 0%, transparent 70%)",
+    filter: "blur(120px)",
+    zIndex: -1
+  }}
+/>
     <div style={appStyle}>
       {/* Header */}
       <div style={headerStyle}>
