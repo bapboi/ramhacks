@@ -1,35 +1,45 @@
+"""
+checkin.py
+
+POST /checkin/{name}          — simple check-in (no photo)
+POST /checkin/{name}/verify   — photo check-in with Gemini verification
+POST /interactions            — check if a new med conflicts with active meds
+"""
+
 from fastapi import APIRouter, UploadFile, File
+from pydantic import BaseModel
 from datetime import datetime
 import requests
 import json
 import base64
 import re
+from typing import List
 
-from app.state.medstore import med_store, compute_next_due
+from app.state.medstore import (
+    get_med,
+    get_all_meds,
+    update_med_fields,
+    compute_next_due,
+)
 from app.config import config
+from app.state.interactions import check_interactions, _gemini_post
 
 router = APIRouter()
-
 GEMINI_API_KEY = config["Gemini"]["ApiKey"]
 
 
-def verify_med_in_photo(image_base64: str, mime_type: str, expected_name: str) -> dict:
-    """
-    Ask Gemini whether the photo shows the expected medication bottle.
-    Returns {"match": bool, "detected": str, "confidence": str}
-    """
-    url = (
-        f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash"
-        f":generateContent?key={GEMINI_API_KEY}"
-    )
+# ─── helpers ──────────────────────────────────────────────────────────────────
 
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"inline_data": {"mime_type": mime_type, "data": image_base64}},
-                    {
-                        "text": f"""You are a medication verification system.
+
+def verify_med_in_photo(image_b64: str, mime_type: str, expected_name: str) -> dict:
+    raw = _gemini_post(
+        {
+            "contents": [
+                {
+                    "parts": [
+                        {"inline_data": {"mime_type": mime_type, "data": image_b64}},
+                        {
+                            "text": f"""You are a medication verification system.
 
 The user claims they are holding: "{expected_name}"
 
@@ -39,71 +49,66 @@ Return STRICT JSON ONLY:
 
 {{
   "match": true or false,
-  "detected": "<name you actually see on the bottle/package, or 'unclear'>",
+  "detected": "<name you see on the label, or 'unclear'>",
   "confidence": "high | medium | low"
 }}
 
 Rules:
-- match is true only if the detected medication name matches or is clearly the same drug as "{expected_name}"
-- Be lenient with brand vs generic names (e.g. Tylenol = acetaminophen)
-- If you cannot read the label, set match to false and detected to "unclear"
+- match is true only if the label matches "{expected_name}" (brand/generic equivalents are OK)
+- If you cannot read the label clearly, set match to false and detected to "unclear"
 """
-                    },
-                ]
-            }
-        ]
-    }
-
+                        },
+                    ]
+                }
+            ]
+        }
+    )
     try:
-        response = requests.post(url, json=payload, timeout=20)
-        data = response.json()
-
-        candidate = data.get("candidates", [])[0]
-        raw_text = candidate["content"]["parts"][0].get("text", "")
-
-        match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        return (
+            json.loads(m.group(0))
+            if m
+            else {"match": False, "detected": "parse_error", "confidence": "low"}
+        )
+    except Exception:
         return {"match": False, "detected": "parse_error", "confidence": "low"}
 
-    except Exception as e:
-        return {"match": False, "detected": f"error: {e}", "confidence": "low"}
+
+# ─── Routes ───────────────────────────────────────────────────────────────────
 
 
 @router.post("/checkin/{name}")
 def check_in(name: str):
-    """Simple timestamp-only check-in (no photo required)."""
-    med = med_store.get(name.lower())
-
+    """Simple check-in with no photo."""
+    med = get_med(name)
     if not med:
         return {"error": "not found"}
 
-    med["last_taken"] = datetime.utcnow().isoformat()
-    med["next_due"] = (
-        compute_next_due(med["frequency_hours"]).isoformat()
-        if med["frequency_hours"]
-        else None
-    )
-    med["check_in_required"] = False
+    now = datetime.utcnow().isoformat()
+    next_due = compute_next_due(med["frequency_hours"])
 
-    return {"success": True, "med": med}
+    update_med_fields(
+        med["name"],
+        last_taken=now,
+        next_due=next_due,
+        check_in_required=0,
+    )
+    return {"success": True}
 
 
 @router.post("/checkin/{name}/verify")
 async def check_in_with_photo(name: str, file: UploadFile = File(...)):
-    """
-    Photo check-in: verifies the photo matches the medication before marking taken.
-    """
-    med = med_store.get(name.lower())
-
+    """Photo check-in — Gemini verifies the bottle before marking taken."""
+    med = get_med(name)
     if not med:
         return {"success": False, "error": "Medication not found"}
 
     contents = await file.read()
-    image_b64 = base64.b64encode(contents).decode("utf-8")
-
-    result = verify_med_in_photo(image_b64, file.content_type, med["name"])
+    result = verify_med_in_photo(
+        base64.b64encode(contents).decode("utf-8"),
+        file.content_type,
+        med["name"],
+    )
 
     if not result.get("match"):
         return {
@@ -114,18 +119,34 @@ async def check_in_with_photo(name: str, file: UploadFile = File(...)):
             "message": f"Photo does not appear to show {med['name']}. Detected: {result.get('detected', 'unclear')}",
         }
 
-    med["last_taken"] = datetime.utcnow().isoformat()
-    med["next_due"] = (
-        compute_next_due(med["frequency_hours"]).isoformat()
-        if med["frequency_hours"]
-        else None
+    now = datetime.utcnow().isoformat()
+    next_due = compute_next_due(med["frequency_hours"])
+    update_med_fields(
+        med["name"],
+        last_taken=now,
+        next_due=next_due,
+        check_in_required=0,
     )
-    med["check_in_required"] = False
 
     return {
         "success": True,
         "verified": True,
         "detected": result.get("detected"),
         "confidence": result.get("confidence"),
-        "med": med,
     }
+
+
+class InteractionRequest(BaseModel):
+    new_med: str
+
+
+@router.post("/interactions")
+def check_med_interactions(body: InteractionRequest):
+    """
+    Check if new_med interacts with any currently saved meds.
+    All saved meds are considered active — not just ones that have been checked in.
+    """
+    all_meds = get_all_meds()
+    active = [m["name"] for m in all_meds if m["name"].lower() != body.new_med.lower()]
+    result = check_interactions(body.new_med, active)
+    return result
