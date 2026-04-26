@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-
+import { motion } from "framer-motion";
 export default function MedInputPanel({ onUploaded }) {
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
@@ -20,7 +20,6 @@ export default function MedInputPanel({ onUploaded }) {
     onUploaded?.();
   };
 
-  // 📸 OPEN CAMERA
   const openCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -34,7 +33,6 @@ export default function MedInputPanel({ onUploaded }) {
     }
   };
 
-  // 🔥 ATTACH STREAM AFTER RENDER (THIS IS THE FIX)
   useEffect(() => {
     if (cameraOpen && videoRef.current && stream) {
       videoRef.current.srcObject = stream;
@@ -78,46 +76,28 @@ export default function MedInputPanel({ onUploaded }) {
   };
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>Scan Medication</h2>
-
-      <button onClick={openCamera}>📸 Scan with Camera</button>
-
-      <button onClick={() => fileInputRef.current.click()}>📁 Upload</button>
+    <motion.div
+      className="card glow"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <h3 style={{ marginBottom: 10 }}>Upload / Add Medication</h3>
 
       <input
         type="file"
-        accept="image/*"
-        ref={fileInputRef}
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) uploadFile(file);
+        style={{
+          width: "100%",
+          padding: "10px",
+          background: "#000",
+          border: "1px solid var(--border)",
+          borderRadius: "8px",
+          color: "white",
         }}
       />
 
-      {/* 📸 CAMERA VIEW */}
-      {cameraOpen && (
-        <div style={{ marginTop: 10 }}>
-          <video
-            ref={videoRef}
-            style={{
-              width: "100%",
-              borderRadius: 8,
-              background: "black",
-            }}
-            playsInline
-            muted
-          />
-
-          <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-            <button onClick={capture}>📷 Capture</button>
-            <button onClick={stopCamera}>❌ Close</button>
-          </div>
-
-          <canvas ref={canvasRef} style={{ display: "none" }} />
-        </div>
-      )}
-    </div>
+      <button className="btn btn-accent" style={{ marginTop: 10 }}>
+        Analyze
+      </button>
+    </motion.div>
   );
 }
