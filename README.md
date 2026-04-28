@@ -17,7 +17,7 @@ medsup aims to help assist these groups in retaining autonomy in their daily lif
 ### 1. clone the repository
 
 ```bash
-git clone <https://github.com/bapboi/ramhacks.git>
+git clone https://github.com/bapboi/ramhacks.git
 cd ramhacks
 ```
 
